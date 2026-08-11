@@ -3,7 +3,7 @@ import scipy.linalg as la
 import control
 
 #Function to simulate coupled spiking control  #############################################################################################
-def simulate_coupled_spiking_control(nT, dt, t_fut, M, N, A, B, C, z, x, x0, lam, a, mu, ref_period_lenght, delay=True, kill=False, **kwargs):
+def simulate_coupled_spiking_control(nT, dt, t_fut, M, N, A, B, C, S, z, x, x0, lam, a, mu, ref_period_lenght, delay=True, kill=False, **kwargs):
     """Run the full simulation over nT timesteps with spike-based control on coupled oscillator systems (arbitrary dimensions).
     
         Parameters:
@@ -24,6 +24,8 @@ def simulate_coupled_spiking_control(nT, dt, t_fut, M, N, A, B, C, z, x, x0, lam
             Control input matrix (maps control signals to state changes).
         C : array
             Cost matrix (introduces a spike cost on velocity).
+        S : array
+            Output matrix (maps system states to output that is compared to the target).
         x0 : array
             Initial state of the system.
         lam : float
@@ -84,14 +86,14 @@ def simulate_coupled_spiking_control(nT, dt, t_fut, M, N, A, B, C, z, x, x0, lam
     for i in range(1, nT):
 
         odd_idx = np.arange(1, 2*M, 2)
-        z_base[[1, 3], 5000:] = 5
+        #z_base[[1, 3], 5000:] = 5
         z[odd_idx, i] = z[odd_idx, i-1] + dt * leak_z * (z_base[odd_idx, i-1] - z[odd_idx, i-1])
 
         # Update system states
         x[:, i] = x[:, i-1] + dt * (A @ x[:, i-1]) + B @ s[:, i-1]
 
         # Voltage Update
-        V[:, i] = B.T @ Af.T @ C @ (z[:, i] - Af @ x[:, i])
+        V[:, i] = B.T @ Af.T @ S.T @ C @ (z[:, i] - S @ Af @ x[:, i])
                   
         # Update rates
         r[:, i] = r[:, i-1] + dt * (-lam * r[:, i-1]) + s[:, i-1]
@@ -117,7 +119,7 @@ def simulate_coupled_spiking_control(nT, dt, t_fut, M, N, A, B, C, z, x, x0, lam
         # Spike determination
         if delay == True:
             # Update Adaptive Threshold (scales for each neuron based on its past activity)
-            Th[:, i] = (np.diag(B.T @ Af.T @ C @ Af @ B)+mu) / 2 + a * (r[:, i] + 0.5)
+            Th[:, i] = (np.diag(B.T @ Af.T @ S.T @ C  @ S @ Af @ B)+mu) / 2 + a * (r[:, i] + 0.5)
             # Update Predicted State (plotting stuff)
             x_pred[:, i] = Af @ x[:, i]
             #Register Spikes
@@ -132,7 +134,7 @@ def simulate_coupled_spiking_control(nT, dt, t_fut, M, N, A, B, C, z, x, x0, lam
 
         if delay == False:
             # Update Non-Adaptive Threshold
-            Th = np.diag((B.T @ Af.T @ C @ Af @ B) + mu)/2 
+            Th = np.diag((B.T @ Af.T @ S.T @ C @ S @ Af @ B) + mu)/2 
             x_pred[:, i] = Af @ x[:, i]
             #One Neuron Spikes at a time
             abovethreshold = np.where(np.logical_and(V[:, i] > Th, can_spike))[0]  
@@ -150,8 +152,8 @@ def simulate_coupled_spiking_control(nT, dt, t_fut, M, N, A, B, C, z, x, x0, lam
         # Compute error (plotting stuff)
         even_dims = range(0, x.shape[0], 2)
         for j in even_dims:
-            error_spiking[j, i] = (x[j, i] - z[j, i])
-            pred_error_spiking[j, i] = (x_pred[j, i] - z[j, i])
+            error_spiking[j, i] = ((S @ x)[j, i] - z[j, i])
+            pred_error_spiking[j, i] = ((S @ x_pred)[j, i] - z[j, i])
         
         # error_spiking[:, i] = (x[:, i] - z[0, i])
         # pred_error_spiking[:, i] = (x_pred[:, i] - z[0, i])

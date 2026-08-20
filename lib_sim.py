@@ -3,7 +3,7 @@ import scipy.linalg as la
 import control
 
 #Function to simulate coupled spiking control  #############################################################################################
-def simulate_coupled_spiking_control(nT, dt, t_fut, M, N, A, B, C, S, z, x, x0, lam, a, mu, ref_period_lenght, delay=True, kill=False, **kwargs):
+def simulate_coupled_spiking_control(nT, dt, t_fut, M, N, A, B, C, S, z, x, x0, lam, a, mu, ref_period_length, delay=True, kill=False, **kwargs):
     """Run the full simulation over nT timesteps with spike-based control on coupled oscillator systems (arbitrary dimensions).
     
         Parameters:
@@ -34,7 +34,7 @@ def simulate_coupled_spiking_control(nT, dt, t_fut, M, N, A, B, C, S, z, x, x0, 
             Adjusts the adaptive thresholds based on past spiking activity of each neuron (only if delay is True).
         mu : float
             Scaling factor for the threshold.
-        ref_period_lenght : float
+        ref_period_length : float
             Length of the refractory period for neurons (time during which neurons cannot spike again, usually set to zero).
         delay : bool
             If True, introduces adaptive thresholds for each neuron (helps the network deal with delayed signals).
@@ -74,7 +74,7 @@ def simulate_coupled_spiking_control(nT, dt, t_fut, M, N, A, B, C, S, z, x, x0, 
     pred_error_spiking = np.zeros((len(x[:, 0]), nT)) #(only used for plotting)
 
     #Time settings
-    ref_period = t_fut * ref_period_lenght
+    ref_period = t_fut * ref_period_length # LE: Why is this a multiple of t_fut?
     can_spike = np.ones(N)
     timer = np.ones(N) * ref_period
 
@@ -85,9 +85,9 @@ def simulate_coupled_spiking_control(nT, dt, t_fut, M, N, A, B, C, S, z, x, x0, 
     # Run simulation
     for i in range(1, nT):
 
-        odd_idx = np.arange(1, 2*M, 2)
+        #odd_idx = np.arange(1, 2*M, 2)
         #z_base[[1, 3], 5000:] = 5
-        z[odd_idx, i] = z[odd_idx, i-1] + dt * leak_z * (z_base[odd_idx, i-1] - z[odd_idx, i-1])
+        z[:, i] = z[:, i-1] + dt * leak_z * (z_base[:, i-1] - z[:, i-1])
 
         # Update system states
         x[:, i] = x[:, i-1] + dt * (A @ x[:, i-1]) + B @ s[:, i-1]
@@ -150,8 +150,8 @@ def simulate_coupled_spiking_control(nT, dt, t_fut, M, N, A, B, C, S, z, x, x0, 
             can_spike[timer <= 0] = 1
 
         # Compute error (plotting stuff)
-        even_dims = range(0, x.shape[0], 2)
-        for j in even_dims:
+        all_dims = range((S @ x).shape[0])
+        for j in all_dims:
             error_spiking[j, i] = ((S @ x)[j, i] - z[j, i])
             pred_error_spiking[j, i] = ((S @ x_pred)[j, i] - z[j, i])
         
@@ -161,7 +161,7 @@ def simulate_coupled_spiking_control(nT, dt, t_fut, M, N, A, B, C, S, z, x, x0, 
     return z, s, x, V, Th, x_pred, error_spiking, pred_error_spiking
 
 #Function to simulate spiking control of a single SMD (just in case)  #############################################################################################
-def simulate_spiking_control(nT, dt, t_fut, N, A, B, C, x0, lam, a, mu, ref_period_lenght, delay=True, Zstep=False, perturb=False, noise=False, **kwargs):
+def simulate_spiking_control(nT, dt, t_fut, N, A, B, C, x0, lam, a, mu, ref_period_length, delay=True, Zstep=False, perturb=False, noise=False, **kwargs):
     """Run the full simulation over nT timesteps with spike-based control.
     
         Parameters:
@@ -188,7 +188,7 @@ def simulate_spiking_control(nT, dt, t_fut, N, A, B, C, x0, lam, a, mu, ref_peri
             Adjusts the adaptive thresholds based on past spiking activity of each neuron (only if delay is True).
         mu : float
             Scaling factor for the threshold.
-        ref_period_lenght : float
+        ref_period_length : float
             Length of the refractory period for neurons (time during which neurons cannot spike again).
         delay : bool
             If True, introduces adaptive thresholds for each neuron (helps the network deal with delayed signals).
@@ -231,7 +231,7 @@ def simulate_spiking_control(nT, dt, t_fut, N, A, B, C, x0, lam, a, mu, ref_peri
 
     #Time settings
     t0 = nT / 2.5
-    ref_period = t_fut * ref_period_lenght
+    ref_period = t_fut * ref_period_length
     can_spike = np.ones(N)
     timer = np.ones(N) * ref_period
    
@@ -296,7 +296,7 @@ def simulate_spiking_control(nT, dt, t_fut, N, A, B, C, x0, lam, a, mu, ref_peri
 
         if delay == False:
             # Update Non-Adaptive Threshold
-            Th = np.diag((B.T @ Af.T @ C @ Af @ B) + mu)/2 
+            Th = (np.diag(B.T @ Af.T @ C @ Af @ B) + mu)/2 
             x_pred[:, i] = Af @ x[:, i]
             #One Neuron Spikes at a time
             abovethreshold = np.where(np.logical_and(V[:, i] > Th, can_spike))[0]  
